@@ -2,8 +2,12 @@
 // Licensed under the MIT License.
 
 #include "core/providers/cuda/cuda_common.h"
-#include "core/providers/cuda/shared_inc/fpgeneric.h"
+
 #include "core/platform/env_var_utils.h"
+#include "core/providers/cuda/cuda_kernel.h"
+#include "core/providers/cuda/shared_inc/fpgeneric.h"
+#include "contrib_ops/cpu/bert/attention_base.h"
+#include "contrib_ops/cuda/bert/tensorrt_fused_multihead_attention/mha_runner.h"
 #include "contrib_ops/cuda/bert/attention_impl.h"
 #include "contrib_ops/cuda/bert/attention.h"
 #include "contrib_ops/cuda/bert/bert_padding.h"
@@ -16,6 +20,21 @@ using namespace ONNX_NAMESPACE;
 namespace onnxruntime {
 namespace contrib {
 namespace cuda {
+
+using namespace onnxruntime::cuda;
+
+template <typename T>
+class Attention final : public CudaKernel, public AttentionBase {
+ public:
+  Attention(const OpKernelInfo& info);
+  Status ComputeInternal(OpKernelContext* context) const override;
+
+ protected:
+  bool disable_fused_runner_;
+  bool enable_trt_flash_attention_;
+  bool disable_memory_efficient_attention_;
+  mutable std::unique_ptr<MHARunner> fused_fp16_runner_;
+};
 
 constexpr int kPastSequenceLengthInputIndex = 6;
 constexpr int kPastInputIndex = 4;

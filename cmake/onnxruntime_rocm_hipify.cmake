@@ -6,7 +6,6 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 # GLOB pattern of file to be excluded
 set(contrib_ops_excluded_files
   "bert/attention.cc"
-  "bert/attention.h"
   "bert/attention_impl.cu"
   "bert/attention_softmax.h"
   "bert/multihead_attention.cc"

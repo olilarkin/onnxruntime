@@ -1,9 +1,11 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#include "contrib_ops/rocm/bert/attention.h"
-#include "contrib_ops/rocm/bert/attention_impl.h"
 #include "core/providers/rocm/rocm_common.h"
+
+#include "contrib_ops/cpu/bert/attention_base.h"
+#include "contrib_ops/rocm/bert/attention_impl.h"
+#include "core/providers/rocm/rocm_kernel.h"
 #include "core/providers/rocm/shared_inc/fpgeneric.h"
 #include "core/providers/rocm/tunable/gemm.h"
 
@@ -19,13 +21,20 @@ constexpr int kPastSequenceLengthInputIndex = 6;
 constexpr int kPastInputIndex = 4;
 constexpr int kPresentOutputIndex = 1;
 
-#define REGISTER_KERNEL_TYPED(T)                                  \
-  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
-      Attention,                                                  \
-      kMSDomain,                                                  \
-      1,                                                          \
-      T,                                                          \
-      kRocmExecutionProvider,                                     \
+template <typename T>
+class Attention final : public RocmKernel, public AttentionBase {
+ public:
+  Attention(const OpKernelInfo& info);
+  Status ComputeInternal(OpKernelContext* context) const override;
+};
+
+#define REGISTER_KERNEL_TYPED(T)                                               \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                               \
+      Attention,                                                               \
+      kMSDomain,                                                               \
+      1,                                                                       \
+      T,                                                                       \
+      kRocmExecutionProvider,                                                  \
       (*KernelDefBuilder::Create())                                            \
           .MayInplace(kPastInputIndex, kPresentOutputIndex)                    \
           .TypeConstraint("T", DataTypeImpl::GetTensorType<T>())               \
@@ -59,7 +68,7 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
                                   &parameters,
                                   device_prop.maxThreadsPerBlock,
                                   past_seq_len));
-  ORT_ENFORCE(parameters.sequence_length == parameters.kv_sequence_length);  // self attention 
+  ORT_ENFORCE(parameters.sequence_length == parameters.kv_sequence_length);  // self attention
 
   TensorShapeVector output_shape(3);
   output_shape[0] = static_cast<int64_t>(parameters.batch_size);
@@ -108,12 +117,12 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
       /*beta=*/1.0f,
       reinterpret_cast<HipT*>(gemm_buffer.get()), n));
 
-  size_t workSpaceSize = GetAttentionWorkspaceSize(element_size, 
+  size_t workSpaceSize = GetAttentionWorkspaceSize(element_size,
                                                    parameters.batch_size,
-                                                   parameters.num_heads, 
+                                                   parameters.num_heads,
                                                    parameters.head_size,
                                                    parameters.sequence_length,
-                                                   parameters.past_sequence_length); 
+                                                   parameters.past_sequence_length);
 
   auto work_space = GetScratchBuffer<void>(workSpaceSize, context->GetComputeStream());
   return LaunchAttentionKernel(
