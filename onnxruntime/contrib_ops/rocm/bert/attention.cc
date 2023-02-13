@@ -92,7 +92,7 @@ Status Attention<T>::ComputeInternal(OpKernelContext* context) const {
   auto gemm_buffer = GetScratchBuffer<T>(static_cast<size_t>(m) * n, context->GetComputeStream());
 
   typedef typename ToHipType<T>::MappedType HipT;
-  namespace blas = rocm::tunable::blas;
+  namespace blas = tunable::blas;
 
   // Bias shape is (N), broadcast using B(N, M) = 1 * bias(N, 1) x ones(1, M) + 0 * B.
   // TODO: use custom kernel of expand to improve the performance.
