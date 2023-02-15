@@ -661,7 +661,7 @@ Status QkvToContext(
     int4 strides;
     const int mask_dimension = static_cast<int>(mask_index_dims.size());
     if (mask_dimension == 2) {
-      strides = {sequence_length, 0, 0, 1};
+      strides = {total_sequence_length, 0, 0, 1};
     } else if (mask_dimension == 3) {
       strides = {sequence_length * total_sequence_length, 0, total_sequence_length, 1};
     } else if (mask_dimension == 4) {
