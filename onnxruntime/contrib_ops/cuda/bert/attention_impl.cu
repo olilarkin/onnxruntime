@@ -627,7 +627,6 @@ Status QkvToContext(
   const int* mask_index = data.mask_index;
   gsl::span<const int64_t>& mask_index_dims = data.mask_index_dims;
 
-  // Raw attention mask could be 2D (BxT) or 3D (BxSxT) or 4D(Bx1xMxM), where M is the max sequence length.
   bool use_raw_attention_mask = (nullptr != mask_index && mask_index_dims.size() >= 2);
 
   // Compute Q*K' (as K'*Q), scaled by 1/sqrt(H) and store in scratch1: BxNxSxT
@@ -657,8 +656,20 @@ Status QkvToContext(
 
   // Apply softmax and store result R to scratch2: BxNxSxT
   if (use_raw_attention_mask) {  // 2d, 3d or 4d attention mask
+    // Raw attention mask could be 2D (BxT) or 3D (BxSxT) or 4D(Bx1xMxM), where M is the max sequence length.
+    auto* mask = mask_index;
+    int4 strides;
     const int mask_dimension = static_cast<int>(mask_index_dims.size());
-
+    if (mask_dimension == 2) {
+      strides = {sequence_length, 0, 0, 1};
+    } else if (mask_dimension == 3) {
+      strides = {sequence_length * total_sequence_length, 0, total_sequence_length, 1};
+    } else if (mask_dimension == 4) {
+      int max_sequence_length = parameters.max_sequence_length;
+      strides = {max_sequence_length * max_sequence_length, max_sequence_length, max_sequence_length, 1};
+      // offset to skip past sequence part, so that we can index it with [batch_index, 0, sequence_index, token_index]
+      mask = mask + parameters.past_sequence_length * max_sequence_length;
+    }
     // For testing, environment variable ORT_TRANSFORMER_OPTIONS=1 could enable persistent softmax used in Torch.
     const TransformerOptions* options = TransformerOptions::GetInstance();
     bool use_persistent_softmax = options->IsPrecisionMode() && !options->DisablePersistentSoftmax();
@@ -666,10 +677,9 @@ Status QkvToContext(
     T* persistent_softmax_workspace = scratch1;  // replace Q*K' in place with masked score for persistent softmax.
     ORT_RETURN_IF_ERROR(
         ComputeSoftmaxWithRawMask<T>(stream, total_sequence_length, sequence_length, batch_size, num_heads,
-                                     mask_index, nullptr, data.relative_position_bias, scratch1, scratch2,
-                                     parameters.is_unidirectional, scale, mask_dimension,
-                                     parameters.max_sequence_length, use_persistent_softmax,
-                                     persistent_softmax_workspace, mask_filter_value));
+                                     strides, mask, nullptr, data.relative_position_bias, scratch1, scratch2,
+                                     parameters.is_unidirectional, scale,
+                                     use_persistent_softmax, persistent_softmax_workspace, mask_filter_value));
   } else if (nullptr != mask_index) {  // 1d mask index
     assert(mask_index_dims.size() == 1);
     // mask_index has 1D shape: either (batch_size) or (2*batch_size). Only the later one has start postions.
@@ -829,12 +839,12 @@ Status DecoderQkvToContext(
   constexpr bool is_unidirectional = false;
   const T* add_before_softmax = nullptr;
   if (has_key_padding_mask) {
-    constexpr int mask_dimension = 2;
-    constexpr int max_sequence_length = 0;
-    ORT_RETURN_IF_ERROR(ComputeSoftmaxWithRawMask<T>(stream, kv_sequence_length, sequence_length, batch_size, num_heads,
-                                                     nullptr, key_padding_mask, add_before_softmax, scratch1, scratch2,
-                                                     is_unidirectional, 1.0f, mask_dimension, max_sequence_length,
-                                                     false, nullptr, mask_filter_value));
+    int4 strides = {sequence_length, 0, 0, 1};
+    ORT_RETURN_IF_ERROR(ComputeSoftmaxWithRawMask<T>(
+        stream, kv_sequence_length, sequence_length, batch_size, num_heads,
+        strides, nullptr, key_padding_mask, add_before_softmax, scratch1, scratch2,
+        is_unidirectional, 1.0f,
+        false, nullptr, mask_filter_value));
   } else {
     ORT_RETURN_IF_ERROR(ComputeSoftmax<T>(stream, kv_sequence_length, sequence_length, batch_size, num_heads,
                                           add_before_softmax, scratch1, scratch2, is_unidirectional));
