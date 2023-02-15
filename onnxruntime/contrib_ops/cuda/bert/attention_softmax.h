@@ -295,7 +295,7 @@ __global__ void SoftmaxWithRawMaskLargeKernel(const int all_sequence_length,
     int mask_offset = attention_mask_strides.x * batch_index +
                       attention_mask_strides.y * 0 +
                       attention_mask_strides.z * sequence_index +
-                      attention_mask_strides.w * threadIdx.x;
+                      attention_mask_strides.w * seq_idx;
 
     if (nullptr == key_padding_mask) {
       const int& mask = attention_mask[mask_offset];
