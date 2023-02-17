@@ -445,6 +445,7 @@ Status Model::Load(ModelProto&& model_proto,
 
 template <typename T, typename Loader>
 static Status LoadModelHelper(const T& file_path, Loader loader) {
+  printf("LoadModelHelper: %s\n", file_path);
   int fd;
   Status status = Env::Default().FileOpenRd(file_path, fd);
   if (!status.IsOK()) {

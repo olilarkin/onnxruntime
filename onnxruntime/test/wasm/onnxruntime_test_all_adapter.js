@@ -9,6 +9,8 @@
 // Module is predefined for scripts injected from "--pre-js"
 (function () {
     if (typeof process !== 'undefined') {
+        // In Node.js
+
         // check for flag "--gtest_output=xml:"
         const argGtestOutputPrefix = '--gtest_output=xml:';
 
@@ -25,6 +27,11 @@
                 break;
             }
         }
+    } else if (typeof __karma__ !== 'undefined') {
+        // In browser (launched by karma)
+
+        __karma__.start = function(config) {
+            console.log('OK...');
+        }
     }
 })();
-
