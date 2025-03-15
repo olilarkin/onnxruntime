@@ -82,7 +82,7 @@ if(WIN32)
   )
 elseif(onnxruntime_BUILD_APPLE_FRAMEWORK)
   # apple framework requires the header file be part of the library
-  onnxruntime_add_shared_library(onnxruntime
+  onnxruntime_add_static_library(onnxruntime
     ${ONNXRUNTIME_PUBLIC_HEADERS}
     "${CMAKE_CURRENT_BINARY_DIR}/generated_source.c"
   )
@@ -284,7 +284,6 @@ else()
     FOLDER "ONNXRuntime")
 endif()
 install(TARGETS onnxruntime
-        EXPORT ${PROJECT_NAME}Targets
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/onnxruntime
         ARCHIVE   DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY   DESTINATION ${CMAKE_INSTALL_LIBDIR}
